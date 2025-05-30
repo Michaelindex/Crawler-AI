@@ -63,6 +63,8 @@ Campos faltantes a buscar de cada médico:
 
 def process_doctor(client, model, doctor_data):
     """Processa um único médico com 6 iterações."""
+    start_time = time.time()  # Início do processamento do médico
+    
     # Dados iniciais
     current_data = {
         "Nome": f"{doctor_data['Firstname']} {doctor_data['LastName']}".strip(),
@@ -89,6 +91,7 @@ def process_doctor(client, model, doctor_data):
 
     # Loop de 6 iterações
     for iteration in range(6):
+        iteration_start_time = time.time()  # Início da iteração
         print(f"\n=== Iteração {iteration + 1} ===")
         
         # Delay incremental de 7 segundos, com 45 segundos na última iteração
@@ -138,13 +141,24 @@ def process_doctor(client, model, doctor_data):
             for key, value in new_data.items():
                 if value and isinstance(value, str) and (not current_data.get(key) or len(value) > len(current_data.get(key, ""))):
                     current_data[key] = value
+                    
+            iteration_time = time.time() - iteration_start_time
+            print(f"\nTempo da iteração {iteration + 1}: {iteration_time:.2f} segundos")
+            
         except Exception as e:
             print(f"Erro durante a iteração {iteration + 1}: {e}")
             continue
 
+    total_time = time.time() - start_time
+    current_data['tempo_total_processamento'] = f"{total_time:.2f} segundos"
+    print(f"\nTempo total de processamento do médico: {total_time:.2f} segundos")
+    
     return current_data
 
 def generate():
+    start_time_total = time.time()  # Início do processamento total
+    start_datetime = datetime.now()  # Data e hora de início
+    
     # Lendo a chave da API do arquivo
     with open('../apis/gemini.key', 'r') as file:
         api_key = file.read().strip()
@@ -190,10 +204,16 @@ def generate():
             })
     
     # Salvando os resultados
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = f'output_{timestamp}.txt'
+    end_datetime = datetime.now()  # Data e hora de fim
+    total_time = time.time() - start_time_total
+    output_file = f'output_{start_datetime.strftime("%Y%m%d_%H%M%S")}.txt'
     
     with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(f"=== Informações de Processamento ===\n")
+        f.write(f"Início: {start_datetime.strftime('%d/%m/%Y %H:%M:%S')}\n")
+        f.write(f"Fim: {end_datetime.strftime('%d/%m/%Y %H:%M:%S')}\n")
+        f.write(f"Tempo Total de Processamento: {total_time:.2f} segundos\n\n")
+        
         for result in results:
             f.write(f"\n=== Médico: {result['crm']} - {result['nome']} ===\n")
             if 'erro' in result:
@@ -204,6 +224,9 @@ def generate():
     
     print(f"\nProcessamento concluído! Resultados salvos em {output_file}")
     print(f"Total de médicos processados: {len(results)}")
+    print(f"Início: {start_datetime.strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"Fim: {end_datetime.strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"Tempo total de processamento: {total_time:.2f} segundos")
 
 if __name__ == "__main__":
     generate()
