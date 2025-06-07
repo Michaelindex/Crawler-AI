@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import json
+import re
 from datetime import datetime
 from google import genai
 from google.genai import types
@@ -12,8 +13,16 @@ def load_api_keys():
     keys = []
     for i in range(1, 5):
         key_file = f"../../../apis/gemini{i}.key" if i > 1 else "../../../apis/gemini.key"
-        with open(key_file, 'r') as f:
-            keys.append(f.read().strip())
+        try:
+            with open(key_file, 'r') as f:
+                key = f.read().strip()
+                if key:
+                    keys.append(key)
+                    print(f"Chave {i} carregada com sucesso")
+                else:
+                    print(f"Arquivo {key_file} está vazio")
+        except FileNotFoundError:
+            print(f"Arquivo {key_file} não encontrado")
     return keys
 
 def build_prompt(row):
@@ -69,13 +78,27 @@ def process_row(row, api_key):
         
         # Extrair JSON da resposta
         response_text = response.text
-        start_idx = response_text.find('{')
-        end_idx = response_text.rfind('}') + 1
-        if start_idx != -1 and end_idx != -1:
-            json_str = response_text[start_idx:end_idx]
+        try:
+            # Primeiro tenta encontrar um bloco JSON
+            json_match = re.search(r'```json\s*({[\s\S]*?})\s*```', response_text)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # Se não encontrar um bloco JSON, tenta extrair o primeiro JSON válido
+                start_idx = response_text.find('{')
+                end_idx = response_text.rfind('}') + 1
+                if start_idx != -1 and end_idx != -1:
+                    json_str = response_text[start_idx:end_idx]
+                else:
+                    print(f"Não foi possível encontrar JSON na resposta para CRM {row['CRM']}")
+                    return row.to_dict()
+            
+            # Tenta fazer o parse do JSON
             return json.loads(json_str)
-        else:
-            print(f"Erro ao extrair JSON da resposta para CRM {row['CRM']}")
+            
+        except json.JSONDecodeError as e:
+            print(f"Erro ao decodificar JSON para CRM {row['CRM']}: {str(e)}")
+            print(f"Texto da resposta: {response_text}")
             return row.to_dict()
             
     except Exception as e:
@@ -94,19 +117,24 @@ def process_chunk(chunk, api_key):
 def main():
     # Carregar chaves da API
     api_keys = load_api_keys()
+    if not api_keys:
+        raise ValueError("Nenhuma chave de API encontrada!")
     
     # Ler o CSV
     df = pd.read_csv('output_20250605_004549.csv')
     
     # Dividir o DataFrame em chunks para processamento paralelo
-    chunk_size = len(df) // len(api_keys)
+    chunk_size = max(1, len(df) // len(api_keys))
     chunks = [df[i:i + chunk_size] for i in range(0, len(df), chunk_size)]
+    
+    # Ajustar o número de workers para o número de chaves disponíveis
+    num_workers = min(len(api_keys), len(chunks))
     
     # Processar chunks em paralelo
     all_results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(api_keys)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
         future_to_chunk = {
-            executor.submit(process_chunk, chunk, api_keys[i]): i 
+            executor.submit(process_chunk, chunk, api_keys[i % len(api_keys)]): i 
             for i, chunk in enumerate(chunks)
         }
         
