@@ -1,0 +1,24 @@
+# Arquivos de ambiente e chaves
+api.key
+.env
+*.key
+
+# Arquivos do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos de log
+*.log
+
+# Arquivos de saída
+output*.csv
+output*.txt
+
+apis
+input.csv
+output.txt
+input*
+output*
+exemplos*
+gemini4.0_*
